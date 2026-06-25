@@ -30,7 +30,7 @@ const industryProfiles = {
     corePrefixes: ["附近", "正规", "专业"],
     commercialTerms: ["上门", "附近", "电话", "预约", "服务", "价格", "收费", "哪家好", "正规", "平台", "到家"],
     weakTerms: ["准吗", "有用吗", "安全吗", "是真的吗", "测试", "测算", "占卜"],
-    blockTerms: ["准吗", "安全吗", "有用吗", "是真的吗", "靠谱吗", "测试", "测算", "占卜", "培训", "课程", "老师", "软件"],
+    blockTerms: ["准吗", "安全吗", "有用吗", "是真的吗", "靠谱吗", "测试", "测算", "占卜", "培训", "课程", "老师", "软件", "app", "免费"],
     qaPatterns: ["{seed}多少钱", "{seed}怎么收费", "{seed}哪家好", "{seed}哪里找", "{seed}怎么预约", "{seed}电话"],
     competitorPatterns: ["{seed}平台", "{seed}哪家好", "{seed}服务", "{seed}电话", "{seed}价格", "{seed}收费标准", "{seed}附近", "{seed}预约"],
     industryPatterns: ["{seed}服务中心", "{seed}到家", "{seed}预约", "{seed}电话", "{seed}门店", "{seed}附近", "{seed}正规", "{seed}平台"],
@@ -192,6 +192,12 @@ const channelConfig = {
 };
 
 const regions = ["北京", "上海", "广州", "深圳", "杭州", "南京", "成都", "武汉", "西安", "重庆", "天津", "苏州", "郑州", "长沙", "青岛", "宁波", "佛山", "合肥", "济南", "厦门", "无锡", "东莞", "福州", "昆明"];
+const districtRegions = [
+  "松江", "浦东", "闵行", "徐汇", "黄浦", "静安", "长宁", "普陀", "虹口", "杨浦", "宝山", "嘉定", "青浦", "奉贤", "崇明",
+  "朝阳", "海淀", "丰台", "通州", "昌平", "顺义", "大兴", "房山", "番禺", "天河", "越秀", "海珠", "白云", "南山", "福田",
+  "宝安", "龙岗", "西湖", "滨江", "余杭", "萧山", "武侯", "锦江", "成华", "江岸", "武昌", "洪山", "雁塔", "碑林"
+];
+const regionSuffixPattern = /[\u4e00-\u9fa5]{2,8}(省|市|区|县|镇|街道|新区|开发区|高新区|经开区|园区)/;
 const audiences = ["新手", "用户", "本地", "线上", "个人", "专业", "免费", "官方", "精准", "附近"];
 const qualifiers = ["免费", "专业", "靠谱", "精准", "快速", "官方", "最新", "高性价比", "口碑好", "附近", "在线", "正规"];
 const intentSuffixes = ["咨询", "服务", "机构", "老师", "平台", "系统", "方案", "价格", "排名", "电话", "入口", "指南", "测试", "占卜", "测算"];
@@ -251,6 +257,104 @@ function normalizeKeyword(keyword) {
     .replace(/\s+/g, "")
     .replace(/[，,。.!！?？、;；:："'“”‘’()（）【】\[\]{}]/g, "")
     .toLowerCase();
+}
+
+function getContainedRegions(text) {
+  const value = String(text || "");
+  return [...new Set([...regions, ...districtRegions].filter((region) => value.includes(region)))];
+}
+
+function getContainedCities(text) {
+  const value = String(text || "");
+  return [...new Set(regions.filter((region) => value.includes(region)))];
+}
+
+function getContainedDistricts(text) {
+  const value = String(text || "");
+  return [...new Set(districtRegions.filter((region) => value.includes(region)))];
+}
+
+function getSeedRegionSet(seedKeywords) {
+  return {
+    cities: new Set(seedKeywords.flatMap((seed) => getContainedCities(seed))),
+    districts: new Set(seedKeywords.flatMap((seed) => getContainedDistricts(seed)))
+  };
+}
+
+function hasRegionSignal(text) {
+  const value = String(text || "");
+  return getContainedRegions(value).length > 0 || regionSuffixPattern.test(value);
+}
+
+function hasConflictingRegion(keyword, seedKeywords) {
+  const seedRegionSet = getSeedRegionSet(seedKeywords);
+  if (!seedRegionSet.cities.size && !seedRegionSet.districts.size) return false;
+
+  const candidateCities = getContainedCities(keyword);
+  const candidateDistricts = getContainedDistricts(keyword);
+  const hasOtherCity = candidateCities.some((region) => !seedRegionSet.cities.has(region));
+  const hasOtherDistrict = seedRegionSet.districts.size
+    ? candidateDistricts.some((region) => !seedRegionSet.districts.has(region))
+    : false;
+
+  return hasOtherCity || hasOtherDistrict;
+}
+
+function appendIfNeeded(base, suffix) {
+  return base.includes(suffix) ? base : `${base}${suffix}`;
+}
+
+function consumeRegionToken(rest, token) {
+  if (!rest.startsWith(token)) return null;
+  const afterToken = rest.slice(token.length);
+  const suffix = ["街道", "高新区", "开发区", "经开区", "新区", "市", "区", "县", "镇"].find((item) => afterToken.startsWith(item)) || "";
+  return {
+    phrase: `${token}${suffix}`,
+    rest: afterToken.slice(suffix.length)
+  };
+}
+
+function splitLeadingRegionPhrase(text) {
+  let rest = String(text || "").trim();
+  let regionPhrase = "";
+  const orderedCities = [...regions].sort((a, b) => b.length - a.length);
+  const orderedDistricts = [...districtRegions].sort((a, b) => b.length - a.length);
+  const firstCity = orderedCities.map((city) => consumeRegionToken(rest, city)).find(Boolean);
+
+  if (firstCity) {
+    regionPhrase += firstCity.phrase;
+    rest = firstCity.rest;
+  }
+
+  let matchedDistrict = true;
+  while (matchedDistrict) {
+    const nextDistrict = orderedDistricts.map((district) => consumeRegionToken(rest, district)).find(Boolean);
+    if (!nextDistrict) {
+      matchedDistrict = false;
+    } else {
+      regionPhrase += nextDistrict.phrase;
+      rest = nextDistrict.rest;
+    }
+  }
+
+  if (!regionPhrase || !rest) return null;
+  return { regionPhrase, core: rest };
+}
+
+function buildLocalizedPrefixKeyword(seed, modifier) {
+  const parts = splitLeadingRegionPhrase(seed);
+  if (!parts) return `${modifier}${seed}`;
+  return `${parts.regionPhrase}${modifier}${parts.core}`;
+}
+
+function applyLocalServiceModifier(base, modifier) {
+  if (base.includes(modifier)) return base;
+
+  if (["附近", "正规", "专业"].includes(modifier)) {
+    return buildLocalizedPrefixKeyword(base, modifier);
+  }
+
+  return `${base}${modifier}`;
 }
 
 function splitSeedTerms(seedKeywords) {
@@ -320,6 +424,7 @@ function isUsefulKeyword(keyword, seedKeywords, profile = industryProfiles.gener
   const blockTerms = profile.blockTerms || [];
   const hasSeedSignal = seedTerms.some((term) => normalizedKeyword.includes(normalizeKeyword(term)));
   if (!hasSeedSignal) return false;
+  if (hasConflictingRegion(keyword, seedKeywords)) return false;
   if (blockTerms.some((term) => normalizedKeyword.includes(normalizeKeyword(term)))) return false;
   if (commercialOnly) {
     const commercialTerms = [...new Set([...adIntentTerms, ...(profile.commercialTerms || [])])];
@@ -337,7 +442,16 @@ function createCoreKeywordRows(seedKeywords, profile = industryProfiles.general,
   const seen = new Set();
 
   seeds.forEach((seed) => {
-    [seed, ...suffixModifiers.map((modifier) => `${seed}${modifier}`), ...prefixModifiers.map((modifier) => `${modifier}${seed}`)]
+    [
+      seed,
+      ...suffixModifiers.map((modifier) => `${seed}${modifier}`),
+      ...prefixModifiers.map((modifier) => {
+        const isLocalService = profile === industryProfiles.local_service || profile.name === industryProfiles.local_service.name;
+        return isLocalService && hasRegionSignal(seed)
+          ? buildLocalizedPrefixKeyword(seed, modifier)
+          : `${modifier}${seed}`;
+      })
+    ]
       .forEach((keyword) => {
         const key = normalizeKeyword(keyword);
         if (!key || seen.has(key)) return;
@@ -365,17 +479,40 @@ function buildKeywordVariant(base, variantIndex, profile = industryProfiles.gene
   const qualifier = qualifiers[Math.floor(variantIndex / (regions.length * audiences.length)) % qualifiers.length];
   const intent = intentSuffixes[Math.floor(variantIndex / (regions.length * audiences.length * qualifiers.length)) % intentSuffixes.length];
   const mode = variantIndex % 10;
+  const baseHasRegion = hasRegionSignal(base);
 
   if (profile === industryProfiles.local_service || profile.name === industryProfiles.local_service.name) {
+    if (baseHasRegion) {
+      const localSuffixes = ["电话", "预约", "价格", "收费", "服务", "附近", "哪家好", "正规"];
+      return applyLocalServiceModifier(base, localSuffixes[variantIndex % localSuffixes.length]);
+    }
+
     if (mode === 0) return `${region}${base}`;
-    if (mode === 1) return `${base}${region}`;
-    if (mode === 2) return `${region}${base}电话`;
-    if (mode === 3) return `${base}${region}预约`;
-    if (mode === 4) return `${region}${base}价格`;
+    if (mode === 1) return `附近${base}`;
+    if (mode === 2) return appendIfNeeded(`${region}${base}`, "电话");
+    if (mode === 3) return appendIfNeeded(`${region}${base}`, "预约");
+    if (mode === 4) return appendIfNeeded(`${region}${base}`, "价格");
+    if (mode === 5) return appendIfNeeded(base, "电话");
+    if (mode === 6) return appendIfNeeded(base, "预约");
+    if (mode === 7) return appendIfNeeded(base, "价格");
+    if (mode === 8) return `正规${base}`;
     return base;
   }
 
   if (commercialOnly && mode > 5) return base;
+
+  if (baseHasRegion) {
+    if (mode === 0) return `${base}${intent}`;
+    if (mode === 1) return `${base}${intent}`;
+    if (mode === 2) return appendIfNeeded(base, intent);
+    if (mode === 3) return appendIfNeeded(base, "咨询");
+    if (mode === 4) return `${audience}${base}${intent}`;
+    if (mode === 5) return `${base}${audience}${intent}`;
+    if (mode === 6) return `${qualifier}${base}`;
+    if (mode === 7) return `${base}${qualifier}${intent}`;
+    if (mode === 8) return appendIfNeeded(base, "电话");
+    return `${qualifier}${base}${audience}`;
+  }
 
   if (mode === 0) return `${region}${base}${intent}`;
   if (mode === 1) return `${base}${region}${intent}`;
