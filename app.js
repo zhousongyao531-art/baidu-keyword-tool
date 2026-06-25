@@ -1,6 +1,6 @@
 const channels = [
   { id: "ai", name: "AI智能拓词", icon: "✦", className: "channel-ai" },
-  { id: "web", name: "全网抓取", icon: "⌕", className: "channel-web" },
+  { id: "web", name: "百度联想词", icon: "⌕", className: "channel-web" },
   { id: "competitor", name: "竞品词", icon: "⌕", className: "channel-competitor" },
   { id: "industry", name: "行业词库", icon: "⌕", className: "channel-industry" },
   { id: "synonym", name: "同义词", icon: "⌕", className: "channel-synonym" },
@@ -20,13 +20,13 @@ const channelConfig = {
     reason: "AI根据搜索意图生成，适合做核心广告词扩展"
   },
   web: {
-    source: "全网抓取",
-    category: "搜索长尾",
+    source: "规则补充",
+    category: "搜索补充",
     intent: "了解",
     matchType: "智能匹配",
-    scoreBase: 91,
+    scoreBase: 84,
     patterns: ["{seed}怎么弄", "{seed}需要准备什么", "{seed}流程", "{seed}时间安排", "{seed}经验分享", "{seed}最新政策", "{seed}常见问题", "{seed}入口", "{seed}详细步骤", "{seed}官方信息"],
-    reason: "模拟全网搜索语料抓取，偏长尾和信息检索需求"
+    reason: "百度联想词数量不足时的规则补充，偏长尾和信息检索需求"
   },
   competitor: {
     source: "竞品词",
@@ -96,11 +96,14 @@ const state = {
     removedDuplicateCount: 0,
     removedExistingCount: 0,
     targetCount: 0,
-    candidateTotal: 0
+    candidateTotal: 0,
+    baiduSuggestionCount: 0,
+    baiduQueryCount: 0,
+    fallbackCount: 0
   }
 };
 
-const storageKey = "baiduKeywordToolStatic.v1";
+const storageKey = "baiduKeywordToolStatic.v2";
 
 const elements = {
   seedKeywords: document.querySelector("#seedKeywords"),
@@ -194,21 +197,7 @@ function generateForChannel(channel, seedKeywords, targetCount) {
   return rows;
 }
 
-function expandKeywordsLocally(payload) {
-  const seedKeywords = parseLines(payload.seedKeywords);
-  const existingKeywords = new Set(parseLines(payload.existingKeywords).map(normalizeKeyword));
-  const selectedChannels = Array.isArray(payload.channels) && payload.channels.length
-    ? payload.channels.filter((channel) => channelConfig[channel])
-    : Object.keys(channelConfig);
-  const targetCount = Math.max(10, Math.min(Number(payload.targetCount) || 100, 10000));
-  const perChannelPool = Math.min(
-    10000,
-    Math.max(targetCount, Math.ceil(targetCount / Math.max(selectedChannels.length, 1)) + existingKeywords.size + 100)
-  );
-  const channelPools = selectedChannels.map((channel) => ({
-    items: generateForChannel(channel, seedKeywords, perChannelPool),
-    cursor: 0
-  }));
+function mergeChannelPools(channelPools, existingKeywords, targetCount) {
   const seen = new Set();
   const results = [];
   let removedDuplicateCount = 0;
@@ -241,13 +230,191 @@ function expandKeywordsLocally(payload) {
   }
 
   results.sort((a, b) => b.score - a.score || a.keyword.localeCompare(b.keyword, "zh-Hans-CN"));
+
   return {
-    total: Math.min(results.length, targetCount),
-    targetCount,
     candidateTotal: channelPools.reduce((sum, pool) => sum + pool.items.length, 0),
     removedDuplicateCount,
     removedExistingCount,
     results: results.slice(0, targetCount)
+  };
+}
+
+function fetchBaiduSuggestions(keyword, timeoutMs = 4500) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `__baiduSuggest_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Baidu suggestion request timed out"));
+    }, timeoutMs);
+
+    function cleanup() {
+      window.clearTimeout(timer);
+      delete window[callbackName];
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    }
+
+    window[callbackName] = (payload) => {
+      const suggestions = Array.isArray(payload?.s) ? payload.s : [];
+      cleanup();
+      resolve(suggestions.filter(Boolean));
+    };
+
+    script.charset = "gbk";
+    script.async = true;
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Baidu suggestion request failed"));
+    };
+    script.src = `https://suggestion.baidu.com/su?wd=${encodeURIComponent(keyword)}&cb=${callbackName}`;
+    document.head.appendChild(script);
+  });
+}
+
+function classifyBaiduIntent(keyword) {
+  if (/价格|费用|收费|多少钱|便宜|优惠|套餐|购买|报名/.test(keyword)) return "购买";
+  if (/哪里|哪家|机构|咨询|电话|入口|官网/.test(keyword)) return "咨询";
+  return "了解";
+}
+
+function createBaiduSuggestionRow(keyword, query, index) {
+  return {
+    keyword,
+    source: "百度联想词",
+    category: "搜索联想",
+    intent: classifyBaiduIntent(keyword),
+    matchType: "智能匹配",
+    score: Math.max(72, 95 - (index % 18)),
+    reason: `来自百度搜索联想词，基于查询"${query}"返回，反映用户搜索输入时的真实联想需求`
+  };
+}
+
+async function generateBaiduSuggestionRows(seedKeywords, targetCount) {
+  const seeds = seedKeywords.length ? seedKeywords : ["高考", "志愿", "复读", "专业选择"];
+  const safeTarget = Math.max(10, Math.min(Number(targetCount) || 100, 10000));
+  const maxQueries = Math.min(60, Math.max(8, seeds.length * 8, Math.ceil(safeTarget / 4)));
+  const rows = [];
+  const seen = new Set();
+  const queued = new Set();
+  const queue = [];
+  let queryIndex = 0;
+  let failedCount = 0;
+
+  seeds.forEach((seed) => {
+    const key = normalizeKeyword(seed);
+    if (key && !queued.has(key)) {
+      queued.add(key);
+      queue.push(seed);
+    }
+  });
+
+  while (rows.length < safeTarget && queryIndex < queue.length && queryIndex < maxQueries) {
+    const query = queue[queryIndex];
+    queryIndex += 1;
+
+    try {
+      const suggestions = await fetchBaiduSuggestions(query);
+      suggestions.forEach((suggestion) => {
+        const key = normalizeKeyword(suggestion);
+        if (!key || seen.has(key)) return;
+
+        seen.add(key);
+        rows.push(createBaiduSuggestionRow(suggestion, query, rows.length));
+
+        if (queue.length < maxQueries && !queued.has(key)) {
+          queued.add(key);
+          queue.push(suggestion);
+        }
+      });
+    } catch {
+      failedCount += 1;
+    }
+  }
+
+  return {
+    rows: rows.slice(0, safeTarget),
+    queryCount: queryIndex,
+    failedCount
+  };
+}
+
+async function expandKeywordsWithSources(payload) {
+  const seedKeywords = parseLines(payload.seedKeywords);
+  const existingKeywords = new Set(parseLines(payload.existingKeywords).map(normalizeKeyword));
+  const selectedChannels = Array.isArray(payload.channels) && payload.channels.length
+    ? payload.channels.filter((channel) => channelConfig[channel])
+    : Object.keys(channelConfig);
+  const targetCount = Math.max(10, Math.min(Number(payload.targetCount) || 100, 10000));
+  const perChannelPool = Math.min(
+    10000,
+    Math.max(targetCount, Math.ceil(targetCount / Math.max(selectedChannels.length, 1)) + existingKeywords.size + 100)
+  );
+  const channelPools = [];
+  let baiduSuggestionCount = 0;
+  let baiduQueryCount = 0;
+  let fallbackCount = 0;
+
+  for (const channel of selectedChannels) {
+    if (channel === "web") {
+      const baiduData = await generateBaiduSuggestionRows(seedKeywords, perChannelPool);
+      const fallbackTarget = Math.max(0, perChannelPool - baiduData.rows.length);
+      const fallbackItems = fallbackTarget ? generateForChannel(channel, seedKeywords, fallbackTarget) : [];
+      baiduSuggestionCount = baiduData.rows.length;
+      baiduQueryCount = baiduData.queryCount;
+      fallbackCount = fallbackItems.length;
+      channelPools.push({
+        items: [...baiduData.rows, ...fallbackItems],
+        cursor: 0
+      });
+    } else {
+      channelPools.push({
+        items: generateForChannel(channel, seedKeywords, perChannelPool),
+        cursor: 0
+      });
+    }
+  }
+
+  const merged = mergeChannelPools(channelPools, existingKeywords, targetCount);
+
+  return {
+    total: Math.min(merged.results.length, targetCount),
+    targetCount,
+    candidateTotal: merged.candidateTotal,
+    removedDuplicateCount: merged.removedDuplicateCount,
+    removedExistingCount: merged.removedExistingCount,
+    baiduSuggestionCount,
+    baiduQueryCount,
+    fallbackCount,
+    results: merged.results
+  };
+}
+
+function expandKeywordsLocally(payload) {
+  const seedKeywords = parseLines(payload.seedKeywords);
+  const existingKeywords = new Set(parseLines(payload.existingKeywords).map(normalizeKeyword));
+  const selectedChannels = Array.isArray(payload.channels) && payload.channels.length
+    ? payload.channels.filter((channel) => channelConfig[channel])
+    : Object.keys(channelConfig);
+  const targetCount = Math.max(10, Math.min(Number(payload.targetCount) || 100, 10000));
+  const perChannelPool = Math.min(
+    10000,
+    Math.max(targetCount, Math.ceil(targetCount / Math.max(selectedChannels.length, 1)) + existingKeywords.size + 100)
+  );
+  const channelPools = selectedChannels.map((channel) => ({
+    items: generateForChannel(channel, seedKeywords, perChannelPool),
+    cursor: 0
+  }));
+  const merged = mergeChannelPools(channelPools, existingKeywords, targetCount);
+
+  return {
+    total: Math.min(merged.results.length, targetCount),
+    targetCount,
+    candidateTotal: merged.candidateTotal,
+    removedDuplicateCount: merged.removedDuplicateCount,
+    removedExistingCount: merged.removedExistingCount,
+    results: merged.results
   };
 }
 
@@ -356,7 +523,10 @@ function renderResults() {
   if (!state.results.length) {
     elements.summaryText.textContent = "还没有结果，输入关键词后点击开始拓词。";
   } else {
-    elements.summaryText.textContent = `共 ${state.results.length} 个关键词，已去重 ${state.stats.removedDuplicateCount} 个，过滤已有词 ${state.stats.removedExistingCount} 个。`;
+    const sourceSummary = state.stats.baiduQueryCount
+      ? `百度联想词 ${state.stats.baiduSuggestionCount} 个，规则补充 ${state.stats.fallbackCount} 个，`
+      : "";
+    elements.summaryText.textContent = `共 ${state.results.length} 个关键词，${sourceSummary}已去重 ${state.stats.removedDuplicateCount} 个，过滤已有词 ${state.stats.removedExistingCount} 个。`;
   }
 
   if (!visible.length) {
@@ -417,13 +587,15 @@ async function expandKeywords() {
   }
 
   setLoading(true);
-  setStatus("正在生成关键词...");
+  setStatus(selectedChannels.includes("web")
+    ? "正在请求百度搜索联想词，并生成补充关键词..."
+    : "正在生成关键词...");
 
-  setTimeout(() => {
+  try {
     const targetCount = Math.max(10, Math.min(Number(elements.targetCount.value) || 100, 10000));
     elements.targetCount.value = String(targetCount);
 
-    const data = expandKeywordsLocally({
+    const data = await expandKeywordsWithSources({
       seedKeywords,
       existingKeywords: parseLines(elements.existingKeywords.value),
       targetCount,
@@ -439,14 +611,50 @@ async function expandKeywords() {
       removedDuplicateCount: data.removedDuplicateCount || 0,
       removedExistingCount: data.removedExistingCount || 0,
       targetCount: data.targetCount || targetCount,
-      candidateTotal: data.candidateTotal || 0
+      candidateTotal: data.candidateTotal || 0,
+      baiduSuggestionCount: data.baiduSuggestionCount || 0,
+      baiduQueryCount: data.baiduQueryCount || 0,
+      fallbackCount: data.fallbackCount || 0
     };
 
-    setStatus(`拓词完成，返回 ${state.results.length} / 目标 ${state.stats.targetCount} 个关键词。`);
+    const baiduText = state.stats.baiduQueryCount
+      ? `其中百度联想词候选 ${state.stats.baiduSuggestionCount} 个，查询 ${state.stats.baiduQueryCount} 次。`
+      : "";
+    setStatus(`拓词完成，返回 ${state.results.length} / 目标 ${state.stats.targetCount} 个关键词。${baiduText}`);
     saveState();
     renderResults();
+  } catch {
+    const targetCount = Math.max(10, Math.min(Number(elements.targetCount.value) || 100, 10000));
+    const fallbackChannels = selectedChannels.includes("web")
+      ? selectedChannels
+      : [...selectedChannels, "web"];
+    const fallbackData = expandKeywordsLocally({
+      seedKeywords,
+      existingKeywords: parseLines(elements.existingKeywords.value),
+      targetCount,
+      channels: fallbackChannels
+    });
+
+    state.results = fallbackData.results.map((item, index) => ({
+      ...item,
+      id: createId(item, index)
+    }));
+    state.selectedIds.clear();
+    state.stats = {
+      removedDuplicateCount: fallbackData.removedDuplicateCount || 0,
+      removedExistingCount: fallbackData.removedExistingCount || 0,
+      targetCount: fallbackData.targetCount || targetCount,
+      candidateTotal: fallbackData.candidateTotal || 0,
+      baiduSuggestionCount: 0,
+      baiduQueryCount: 0,
+      fallbackCount: state.results.length
+    };
+    saveState();
+    renderResults();
+    setStatus("百度联想词请求失败，已使用本地规则补充完成拓词。", "error");
+  } finally {
     setLoading(false);
-  }, 80);
+  }
 }
 
 function exportExcel() {
@@ -508,7 +716,10 @@ function clearResults() {
     removedDuplicateCount: 0,
     removedExistingCount: 0,
     targetCount: 0,
-    candidateTotal: 0
+    candidateTotal: 0,
+    baiduSuggestionCount: 0,
+    baiduQueryCount: 0,
+    fallbackCount: 0
   };
   saveState();
   renderResults();
