@@ -47,6 +47,28 @@
             <input id="targetCount" type="number" value="100" min="10" max="10000" step="10">
             <small>建议范围：10-10000 个关键词</small>
           </label>
+          <label class="target-field">
+            <span class="panel-title">行业类型</span>
+            <select id="industryType">
+              <option value="auto">自动识别</option>
+              <option value="local_service">本地生活 / 到店到家</option>
+              <option value="education">教育培训</option>
+              <option value="medical_beauty">医美健康</option>
+              <option value="ecommerce">电商零售</option>
+              <option value="finance">金融服务</option>
+              <option value="emotion">情感心理 / 测算</option>
+              <option value="business">企业服务</option>
+              <option value="general">通用行业</option>
+            </select>
+            <small>自动识别不准时可手动指定</small>
+          </label>
+          <label class="intent-switch">
+            <input id="commercialOnly" type="checkbox">
+            <span>
+              <strong>只保留高商业意图词</strong>
+              <small>过滤“准不准 / 安全吗 / 怎么办”等弱转化问答词</small>
+            </span>
+          </label>
           <button id="toggleChannels" class="ghost-button" type="button">取消全选</button>
         </div>
 
