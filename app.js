@@ -12,12 +12,12 @@ const channels = [
 const channelConfig = {
   ai: {
     source: "AI智能拓词",
-    category: "升学规划",
+    category: "智能扩展",
     intent: "咨询",
     matchType: "短语匹配",
-    scoreBase: 96,
-    patterns: ["{seed}规划方案", "{seed}怎么选择", "{seed}一对一咨询", "{seed}全流程指导", "{seed}避坑指南", "{seed}申请条件", "{seed}适合人群", "{seed}定制服务", "{seed}智能推荐", "{seed}注意事项"],
-    reason: "AI根据搜索意图生成，适合做核心广告词扩展"
+    scoreBase: 88,
+    patterns: ["{seed}免费", "{seed}在线", "{seed}官网", "{seed}入口", "{seed}app", "{seed}软件", "{seed}咨询", "{seed}服务", "{seed}价格", "{seed}哪家好"],
+    reason: "根据搜索广告常见意图结构生成，适合补充核心转化词"
   },
   web: {
     source: "规则补充",
@@ -34,25 +34,25 @@ const channelConfig = {
     intent: "购买",
     matchType: "精确匹配",
     scoreBase: 94,
-    patterns: ["{seed}机构", "{seed}哪家好", "{seed}服务", "{seed}培训班", "{seed}辅导机构", "{seed}排名", "{seed}价格", "{seed}收费标准", "{seed}品牌推荐", "{seed}在线咨询"],
+    patterns: ["{seed}平台", "{seed}哪家好", "{seed}服务", "{seed}网站", "{seed}app", "{seed}排名", "{seed}价格", "{seed}收费标准", "{seed}推荐", "{seed}在线咨询"],
     reason: "模拟竞品广告词结构，偏高商业意向"
   },
   industry: {
     source: "行业词库",
-    category: "行业标准",
+    category: "行业通用",
     intent: "咨询",
     matchType: "短语匹配",
-    scoreBase: 89,
-    patterns: ["{seed}指导", "{seed}方案", "{seed}服务中心", "{seed}专业咨询", "{seed}评估", "{seed}系统", "{seed}测评", "{seed}报名", "{seed}资料", "{seed}课程"],
-    reason: "来自行业词库模板，适合补充标准品类词"
+    scoreBase: 82,
+    patterns: ["{seed}平台", "{seed}工具", "{seed}系统", "{seed}中心", "{seed}推荐", "{seed}测评", "{seed}排行", "{seed}品牌", "{seed}网站", "{seed}小程序"],
+    reason: "来自通用行业词库模板，适合补充标准品类和平台词"
   },
   synonym: {
     source: "同义词",
     category: "近义表达",
     intent: "了解",
     matchType: "短语匹配",
-    scoreBase: 86,
-    patterns: ["{seed}替代表达", "{seed}相关词", "{seed}近义需求", "{seed}同类服务", "{seed}解决方案", "{seed}咨询指导", "{seed}服务推荐", "{seed}帮助", "{seed}顾问", "{seed}规划"],
+    scoreBase: 78,
+    patterns: ["{seed}相关", "{seed}类似", "{seed}同类", "{seed}推荐", "{seed}测评", "{seed}指南", "{seed}攻略", "{seed}比较", "{seed}区别", "{seed}哪个好"],
     reason: "通过近义表达拓展，覆盖不同搜索说法"
   },
   trend: {
@@ -69,8 +69,8 @@ const channelConfig = {
     category: "问题需求",
     intent: "咨询",
     matchType: "短语匹配",
-    scoreBase: 87,
-    patterns: ["{seed}怎么办", "{seed}有必要吗", "{seed}靠谱吗", "{seed}怎么收费", "{seed}要注意什么", "{seed}失败怎么办", "{seed}怎么提高成功率", "{seed}适合哪些人", "{seed}能解决什么问题", "{seed}哪里咨询"],
+    scoreBase: 76,
+    patterns: ["{seed}准吗", "{seed}靠谱吗", "{seed}有用吗", "{seed}怎么用", "{seed}怎么收费", "{seed}哪个好", "{seed}哪里找", "{seed}是真的吗", "{seed}安全吗", "{seed}要注意什么"],
     reason: "模拟问答平台真实提问，便于发现用户痛点"
   },
   ecommerce: {
@@ -78,16 +78,18 @@ const channelConfig = {
     category: "购买意图",
     intent: "购买",
     matchType: "精确匹配",
-    scoreBase: 90,
-    patterns: ["{seed}服务购买", "{seed}套餐", "{seed}优惠", "{seed}课程价格", "{seed}在线服务", "{seed}顾问套餐", "{seed}预约", "{seed}低价", "{seed}付费咨询", "{seed}购买入口"],
+    scoreBase: 84,
+    patterns: ["{seed}购买", "{seed}套餐", "{seed}优惠", "{seed}价格", "{seed}在线服务", "{seed}会员", "{seed}预约", "{seed}低价", "{seed}付费咨询", "{seed}购买入口"],
     reason: "模拟电商平台搜索词，偏强转化和价格比较"
   }
 };
 
 const regions = ["北京", "上海", "广州", "深圳", "杭州", "南京", "成都", "武汉", "西安", "重庆", "天津", "苏州", "郑州", "长沙", "青岛", "宁波", "佛山", "合肥", "济南", "厦门", "无锡", "东莞", "福州", "昆明"];
-const audiences = ["家长", "学生", "高三", "复读生", "艺考生", "本地", "线上", "一对一", "低分段", "中高分段"];
-const qualifiers = ["免费", "专业", "靠谱", "精准", "快速", "官方", "最新", "高性价比", "口碑好", "附近"];
-const intentSuffixes = ["咨询", "服务", "机构", "老师", "平台", "系统", "方案", "价格", "排名", "电话", "入口", "指南"];
+const audiences = ["新手", "用户", "本地", "线上", "个人", "专业", "免费", "官方", "精准", "附近"];
+const qualifiers = ["免费", "专业", "靠谱", "精准", "快速", "官方", "最新", "高性价比", "口碑好", "附近", "在线", "正规"];
+const intentSuffixes = ["咨询", "服务", "机构", "老师", "平台", "系统", "方案", "价格", "排名", "电话", "入口", "指南", "测试", "占卜", "测算"];
+const adIntentTerms = ["免费", "在线", "入口", "官网", "测试", "测算", "占卜", "咨询", "服务", "平台", "价格", "费用", "收费", "哪家好", "排名", "app", "软件", "预约"];
+const weakIntentTerms = ["怎么", "为什么", "什么意思", "故事", "图片", "文案", "小说", "电视剧", "歌曲", "壁纸", "表情包", "英文", "翻译", "培训", "课程", "老师", "辅导"];
 
 const state = {
   results: [],
@@ -139,6 +141,79 @@ function normalizeKeyword(keyword) {
     .toLowerCase();
 }
 
+function splitSeedTerms(seedKeywords) {
+  return seedKeywords
+    .flatMap((seed) => String(seed).split(/\s+|\/|,|，|、|\+|&/))
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 2);
+}
+
+function getCoreSeedTerms(seedKeywords) {
+  const terms = splitSeedTerms(seedKeywords);
+  return terms.length ? terms : seedKeywords.filter(Boolean);
+}
+
+function getKeywordQuality(keyword, seedKeywords) {
+  const normalizedKeyword = normalizeKeyword(keyword);
+  const seedTerms = getCoreSeedTerms(seedKeywords);
+  const matchedTerms = seedTerms.filter((term) => normalizedKeyword.includes(normalizeKeyword(term)));
+  const containsFullSeed = seedKeywords.some((seed) => normalizedKeyword.includes(normalizeKeyword(seed)));
+  const adIntentHits = adIntentTerms.filter((term) => normalizedKeyword.includes(normalizeKeyword(term))).length;
+  const weakHits = weakIntentTerms.filter((term) => normalizedKeyword.includes(normalizeKeyword(term))).length;
+  const keywordLength = [...String(keyword)].length;
+
+  let score = 64;
+  score += matchedTerms.length * 9;
+  if (containsFullSeed) score += 10;
+  score += Math.min(adIntentHits * 5, 15);
+  if (keywordLength >= 4 && keywordLength <= 12) score += 10;
+  if (keywordLength >= 13 && keywordLength <= 18) score += 4;
+  if (keywordLength > 22) score -= 14;
+  score -= weakHits * 7;
+
+  if (!matchedTerms.length && !containsFullSeed) score -= 22;
+
+  return Math.max(40, Math.min(99, score));
+}
+
+function isUsefulKeyword(keyword, seedKeywords) {
+  const quality = getKeywordQuality(keyword, seedKeywords);
+  const normalizedKeyword = normalizeKeyword(keyword);
+  const seedTerms = getCoreSeedTerms(seedKeywords);
+  const hasSeedSignal = seedTerms.some((term) => normalizedKeyword.includes(normalizeKeyword(term)));
+  if (!hasSeedSignal) return false;
+  if (/培训班|辅导机构|课程|老师/.test(keyword)) return false;
+  return quality >= 58;
+}
+
+function createCoreKeywordRows(seedKeywords) {
+  const seeds = seedKeywords.length ? seedKeywords : ["高考", "志愿", "复读", "专业选择"];
+  const suffixModifiers = ["免费", "在线", "官网", "入口", "测试", "测算", "咨询", "服务", "价格", "哪家好", "app", "软件", "预约"];
+  const prefixModifiers = ["免费", "在线"];
+  const rows = [];
+  const seen = new Set();
+
+  seeds.forEach((seed) => {
+    [seed, ...suffixModifiers.map((modifier) => `${seed}${modifier}`), ...prefixModifiers.map((modifier) => `${modifier}${seed}`)]
+      .forEach((keyword) => {
+        const key = normalizeKeyword(keyword);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        rows.push({
+          keyword,
+          source: "投放核心词",
+          category: "广告核心",
+          intent: classifyBaiduIntent(keyword),
+          matchType: keyword === seed ? "精确匹配" : "短语匹配",
+          score: getKeywordQuality(keyword, seeds),
+          reason: `由种子词"${seed}"和高转化修饰词组合生成，用于补充更接近搜索广告后台的核心投放词`
+        });
+      });
+  });
+
+  return rows;
+}
+
 function buildKeywordVariant(base, variantIndex) {
   if (variantIndex === 0) return base;
 
@@ -179,7 +254,8 @@ function generateForChannel(channel, seedKeywords, targetCount) {
 
     if (key && !seen.has(key)) {
       seen.add(key);
-      const score = Math.max(60, config.scoreBase - ((rows.length + variantIndex) % 18));
+      const qualityScore = getKeywordQuality(keyword, seeds);
+      const score = Math.max(60, Math.min(config.scoreBase, qualityScore) - ((rows.length + variantIndex) % 8));
       rows.push({
         keyword,
         source: config.source,
@@ -229,7 +305,7 @@ function mergeChannelPools(channelPools, existingKeywords, targetCount) {
     }
   }
 
-  results.sort((a, b) => b.score - a.score || a.keyword.localeCompare(b.keyword, "zh-Hans-CN"));
+  results.sort((a, b) => b.score - a.score || [...a.keyword].length - [...b.keyword].length || a.keyword.localeCompare(b.keyword, "zh-Hans-CN"));
 
   return {
     candidateTotal: channelPools.reduce((sum, pool) => sum + pool.items.length, 0),
@@ -280,13 +356,14 @@ function classifyBaiduIntent(keyword) {
 }
 
 function createBaiduSuggestionRow(keyword, query, index) {
+  const score = getKeywordQuality(keyword, [query]);
   return {
     keyword,
     source: "百度联想词",
     category: "搜索联想",
     intent: classifyBaiduIntent(keyword),
     matchType: "智能匹配",
-    score: Math.max(72, 95 - (index % 18)),
+    score: Math.max(72, score - (index % 4)),
     reason: `来自百度搜索联想词，基于查询"${query}"返回，反映用户搜索输入时的真实联想需求`
   };
 }
@@ -294,7 +371,8 @@ function createBaiduSuggestionRow(keyword, query, index) {
 async function generateBaiduSuggestionRows(seedKeywords, targetCount) {
   const seeds = seedKeywords.length ? seedKeywords : ["高考", "志愿", "复读", "专业选择"];
   const safeTarget = Math.max(10, Math.min(Number(targetCount) || 100, 10000));
-  const maxQueries = Math.min(60, Math.max(8, seeds.length * 8, Math.ceil(safeTarget / 4)));
+  const queryModifiers = ["", "免费", "在线", "测试", "占卜", "咨询", "官网", "入口", "价格", "app"];
+  const maxQueries = Math.min(36, Math.max(8, seeds.length * queryModifiers.length));
   const rows = [];
   const seen = new Set();
   const queued = new Set();
@@ -303,10 +381,21 @@ async function generateBaiduSuggestionRows(seedKeywords, targetCount) {
   let failedCount = 0;
 
   seeds.forEach((seed) => {
-    const key = normalizeKeyword(seed);
+    queryModifiers.forEach((modifier) => {
+      const query = modifier ? `${seed}${modifier}` : seed;
+      const key = normalizeKeyword(query);
+      if (key && !queued.has(key)) {
+        queued.add(key);
+        queue.push(query);
+      }
+    });
+  });
+
+  createCoreKeywordRows(seeds).forEach((row) => {
+    const key = normalizeKeyword(row.keyword);
     if (key && !queued.has(key)) {
       queued.add(key);
-      queue.push(seed);
+      if (queue.length < maxQueries) queue.push(row.keyword);
     }
   });
 
@@ -319,14 +408,10 @@ async function generateBaiduSuggestionRows(seedKeywords, targetCount) {
       suggestions.forEach((suggestion) => {
         const key = normalizeKeyword(suggestion);
         if (!key || seen.has(key)) return;
+        if (!isUsefulKeyword(suggestion, seeds)) return;
 
         seen.add(key);
         rows.push(createBaiduSuggestionRow(suggestion, query, rows.length));
-
-        if (queue.length < maxQueries && !queued.has(key)) {
-          queued.add(key);
-          queue.push(suggestion);
-        }
       });
     } catch {
       failedCount += 1;
@@ -361,11 +446,13 @@ async function expandKeywordsWithSources(payload) {
       const baiduData = await generateBaiduSuggestionRows(seedKeywords, perChannelPool);
       const fallbackTarget = Math.max(0, perChannelPool - baiduData.rows.length);
       const fallbackItems = fallbackTarget ? generateForChannel(channel, seedKeywords, fallbackTarget) : [];
+      const coreItems = createCoreKeywordRows(seedKeywords);
       baiduSuggestionCount = baiduData.rows.length;
       baiduQueryCount = baiduData.queryCount;
       fallbackCount = fallbackItems.length;
       channelPools.push({
-        items: [...baiduData.rows, ...fallbackItems],
+        items: [...coreItems, ...baiduData.rows, ...fallbackItems]
+          .sort((a, b) => b.score - a.score || [...a.keyword].length - [...b.keyword].length),
         cursor: 0
       });
     } else {
